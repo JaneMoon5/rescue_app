@@ -20,7 +20,8 @@
                     <div class="form-check">
                         <input class="form-check-input radio-option" type="radio" name="q{{ q.id }}" value="{{ option }}"
                             id="q{{ q.id }}_{{ loop.index }}" {% if q.required %}required{% endif %}
-                            {% if option == '其他' %}data-is-other="1"{% endif %}>
+                            {% if option == '其他' %}data-is-other="1"{% endif %}
+                            {% if q.sort_order == 5 %} data-jump-target="4" {% endif %}>
                         <label class="form-check-label" for="q{{ q.id }}_{{ loop.index }}">{{ option }}</label>
                         {% if option == '其他' %}
                         <input type="text" class="form-control other-input mt-1" style="display:none; width:80%;" placeholder="请注明">
@@ -100,23 +101,45 @@
     }
 
     window.changePage = function(step) {
-        const newPage = currentPage + step;
+        let newPage = currentPage + step;   // ✅ 用 let 代替 const
         if (newPage >= 0 && newPage < pages.length) {
+            
+            // ========== 规则1：第一页选“否” → 自动提交 ==========
             if (step === 1 && currentPage === 0) {
                 const firstPage = pages[0];
                 const radios = firstPage.querySelectorAll('input[type="radio"]');
                 let selectedValue = null;
                 radios.forEach(r => { if (r.checked) selectedValue = r.value; });
                 if (selectedValue === '否') {
-                    document.getElementById('pages-container').style.display = 'none';
-                    document.getElementById('endPage').style.display = 'block';
-                    prevBtn.style.display = 'none';
-                    nextBtn.style.display = 'none';
-                    submitBtn.style.display = 'none';
-                    pageIndicator.textContent = '';
+                    // 移除所有隐藏页面中元素的 required 属性，避免干扰提交
+                    pages.forEach((page, i) => {
+                        if (i !== 0) {
+                            page.querySelectorAll('[required]').forEach(el => {
+                                el.removeAttribute('required');
+                            });
+                        }
+                    });
+                    document.getElementById('mainForm').submit();
+                    return;
+                }
+            }   // ✅ 规则1结束的大括号
+
+            // ========== 规则2：第三页第三题选“否” → 跳到第五页 ==========
+            if (step === 1 && currentPage === 2) {
+                // 查找当前页中带有 data-jump-target 属性的被选中的单选按钮
+                const jumpRadio = document.querySelector('.page[data-page="2"] input[data-jump-target]:checked');
+                if (jumpRadio && jumpRadio.value === '否') {
+                    const targetPage = parseInt(jumpRadio.getAttribute('data-jump-target'));
+                    // 移除当前页到目标页之间所有页面的 required
+                    for (let i = currentPage + 1; i < targetPage; i++) {
+                        pages[i].querySelectorAll('[required]').forEach(el => el.removeAttribute('required'));
+                    }
+                    showPage(targetPage);
                     return;
                 }
             }
+
+            // ========== 常规必填验证 ==========
             if (step === 1) {
                 const currentPageEl = pages[currentPage];
                 const requiredFields = currentPageEl.querySelectorAll('[required]');
@@ -135,6 +158,7 @@
                     return;
                 }
             }
+            
             showPage(newPage);
         }
     };
