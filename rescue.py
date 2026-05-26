@@ -6,15 +6,29 @@ from datetime import datetime
 from flask import Flask, render_template, request, redirect, url_for, session, Response, make_response
 
 app = Flask(__name__)
-app.secret_key = 'your-secret-key-here-change-in-production'  # 更换为随机字符串
+# 从环境变量读取密钥，若不存在则使用一个随机生成的字符串（仅用于临时）
+app.secret_key = os.environ.get('SECRET_KEY', os.urandom(24).hex())
+
+# 管理员凭据也建议从环境变量读取
+ADMIN_USER = os.environ.get('ADMIN_USER', 'admin')
+ADMIN_PASS = os.environ.get('ADMIN_PASS', 'admin123')  # 强烈建议覆盖此值
+
+from werkzeug.middleware.proxy_fix import ProxyFix
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
+
+# ===== 在这里添加强制 HTTPS 跳转 =====
+@app.before_request
+def force_https():
+    if request.url.startswith('http://') and not request.host.startswith('127.0.0.1'):
+        return redirect(request.url.replace('http://', 'https://', 1), code=301)
+# =====================================
+
 
 # ===== 使用绝对路径确保数据库位于 app.py 同目录 =====
 basedir = os.path.abspath(os.path.dirname(__file__))
 DATABASE = os.path.join(basedir, 'questionnaire.db')
 # ===================================================
 
-ADMIN_USER = 'admin'
-ADMIN_PASS = 'admin123'  # 生产环境请修改
 
 # ====================== 数据库初始化 ======================
 def get_db():
