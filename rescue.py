@@ -56,50 +56,66 @@ def get_google_sheet():
         print(f"❌ 连接 Google Sheets 失败: {e}")
         return None
 
-def backup_to_gsheet(participant_code, answers_dict):
-    """将单份问卷答案追加到 Google Sheet"""
+def backup_to_gsheet(participant_code, answers_dict, db_conn=None):
+    """将单份问卷答案追加到 Google Sheet（使用固定题目列表）"""
     sheet = get_google_sheet()
     if not sheet:
         return
-    
-    # 从 sessions 表中获取该被试的会话信息（开始时间、IP）
-    db = get_db()
-    session_info = db.execute(
-        'SELECT start_time, end_time, ip_address FROM sessions WHERE participant_code=? ORDER BY start_time DESC LIMIT 1',
-        (participant_code,)
-    ).fetchone()
-    db.close()  # 注意：不要关闭全局 db 连接，这里用的是独立连接
-    
-    if not session_info:
-        # 理论上应该存在，如果不存在则用空值
-        start_time = ''
-        end_time = ''
-        ip_address = ''
-    else:
-        start_time = session_info['start_time'] or ''
-        end_time = session_info['end_time'] or ''
-        ip_address = session_info['ip_address'] or ''
-    
-    # 准备行数据：顺序必须与表头一致
-    row_data = [
-        datetime.now().strftime('%Y-%m-%d %H:%M:%S'),  # 提交时间
-        participant_code,                              # 被试编号
-        start_time,                                    # 开始时间
-        end_time,                                      # 结束时间
-        ip_address                                     # IP地址
-    ]
-    # 添加各题答案（按题目文本顺序）
-    for q_text, ans in answers_dict.items():
-        row_data.append(ans)
-    
-    # 如果 Sheet 为空，先写入表头（可选，建议手动预设表头，避免自动创建）
-    if not sheet.get_all_values():
-        headers = ['提交时间', '被试编号', '开始时间', '结束时间', 'IP地址'] + list(answers_dict.keys())
-        sheet.append_row(headers)
-        print("✅ 已自动创建表头")
-    
-    sheet.append_row(row_data)
-    print(f"📝 已备份到 Google Sheet: {participant_code} (包含会话信息)")
+
+    # 复用传入的数据库连接，若无则新建
+    close_conn = False
+    if db_conn is None:
+        db_conn = get_db()
+        close_conn = True
+
+    try:
+        # 获取固定题目列表（按 sort_order 排序）
+        ordered_questions = db_conn.execute(
+            'SELECT question_text FROM questions ORDER BY sort_order'
+        ).fetchall()
+        question_texts = [q['question_text'] for q in ordered_questions]
+
+        # 从 answers_dict 中提取答案（缺失则填空）
+        answers_in_order = [answers_dict.get(qt, '') for qt in question_texts]
+
+        # 获取会话信息（开始时间、IP）
+        session_info = db_conn.execute(
+            'SELECT start_time, end_time, ip_address FROM sessions WHERE participant_code=? ORDER BY start_time DESC LIMIT 1',
+            (participant_code,)
+        ).fetchone()
+
+        if not session_info:
+            start_time = end_time = ip_address = ''
+        else:
+            start_time = session_info['start_time'] or ''
+            end_time = session_info['end_time'] or ''
+            ip_address = session_info['ip_address'] or ''
+
+        # 准备行数据（顺序固定）
+        row_data = [
+            datetime.now().strftime('%Y-%m-%d %H:%M:%S'),  # 提交时间
+            participant_code,                              # 被试编号
+            start_time,                                    # 开始时间
+            end_time,                                      # 结束时间
+            ip_address                                     # IP地址
+        ] + answers_in_order
+
+        # 检查是否需要初始化表头
+        if not sheet.get_all_values():
+            headers = ['提交时间', '被试编号', '开始时间', '结束时间', 'IP地址'] + question_texts
+            sheet.append_row(headers)
+            print("✅ 已自动创建固定表头")
+
+        # 追加数据行
+        sheet.append_row(row_data)
+        print(f"📝 已备份到 Google Sheet: {participant_code}")
+
+    except Exception as e:
+        # 捕获异常，避免影响主流程
+        print(f"❌ Google Sheets 备份失败: {e}")
+    finally:
+        if close_conn:
+            db_conn.close()
 
 
 # ====================== 数据库初始化 ======================
@@ -251,9 +267,10 @@ def index():
         db.execute('UPDATE sessions SET end_time = ? WHERE participant_code=? AND end_time IS NULL',
                    (beijing_time, participant_code))
         db.commit()
+        
 
         # ========== 新增：备份到 Google Sheets ==========
-        backup_to_gsheet(participant_code, answers_for_backup)
+        backup_to_gsheet(participant_code, answers_for_backup, db_conn=db)
         # =============================================
 
         resp = make_response(redirect(url_for('thankyou')))
