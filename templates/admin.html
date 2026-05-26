@@ -11,6 +11,10 @@
         已提交问卷数
         <span class="badge bg-success rounded-pill">{{ response_count }}</span>
     </li>
+    <li class="list-group-item d-flex justify-content-between align-items-center">
+        访问会话数
+        <span class="badge bg-info rounded-pill">{{ session_count }}</span>
+    </li>
 </ul>
 <div class="mt-4">
     <a href="{{ url_for('manage_questions') }}" class="btn btn-outline-primary">管理问卷题目</a>

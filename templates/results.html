@@ -3,18 +3,17 @@
 {% block content %}
 <h2>已提交问卷列表</h2>
 <table class="table table-striped">
-    <thead>
-        <tr><th>被试编号</th><th>开始时间</th><th>完成时间</th></tr>
-    </thead>
-    <tbody>
-        {% for p in participants %}
-        <tr>
-            <td>{{ p.participant_code[:8] }}...</td>
-            <td>{{ p.started }}</td>
-            <td>{{ p.finished }}</td>
-        </tr>
-        {% endfor %}
-    </tbody>
+  <thead><tr><th>受试者ID</th><th>开始时间</th><th>结束时间</th><th>IP地址</th></tr></thead>
+  <tbody>
+    {% for p in participants %}
+    <tr>
+      <td>{{ p.participant_code[:8] }}...</td>
+      <td>{{ p.start_time }}</td>
+      <td>{{ p.end_time or '未提交' }}</td>
+      <td>{{ p.ip_address }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
 </table>
 <a href="{{ url_for('admin') }}" class="btn btn-secondary">返回面板</a>
 {% endblock %}

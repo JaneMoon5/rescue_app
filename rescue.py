@@ -1,7 +1,7 @@
 import shutil
 import os
 import csv
-import sqlite3, json, csv, io, uuid
+import sqlite3, json, io, uuid
 from datetime import datetime
 from flask import Flask, render_template, request, redirect, url_for, session, Response, make_response
 
@@ -16,19 +16,17 @@ ADMIN_PASS = os.environ.get('ADMIN_PASS', 'admin123')  # 强烈建议覆盖此�
 from werkzeug.middleware.proxy_fix import ProxyFix
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
 
-# ===== 在这里添加强制 HTTPS 跳转 =====
+# ===== 强制 HTTPS 跳转 =====
 @app.before_request
 def force_https():
     if request.url.startswith('http://') and not request.host.startswith('127.0.0.1'):
         return redirect(request.url.replace('http://', 'https://', 1), code=301)
 # =====================================
 
-
 # ===== 使用绝对路径确保数据库位于 app.py 同目录 =====
 basedir = os.path.abspath(os.path.dirname(__file__))
 DATABASE = os.path.join(basedir, 'questionnaire.db')
 # ===================================================
-
 
 # ====================== 数据库初始化 ======================
 def get_db():
@@ -55,6 +53,13 @@ def init_db():
             question_id INTEGER,
             answer_value TEXT,
             submitted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )''')
+        db.execute('''CREATE TABLE IF NOT EXISTS sessions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            participant_code TEXT,
+            start_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            end_time TIMESTAMP,
+            ip_address TEXT
         )''')
         # 创建元数据表，用于记录 CSV 导入的时间
         db.execute('''CREATE TABLE IF NOT EXISTS metadata (
@@ -101,7 +106,7 @@ def init_db():
             # ===== 清空现有数据 =====
             db.execute('DELETE FROM responses')
             db.execute('DELETE FROM questions')
-            # ... 后续重新导入 ...
+            # 重新导入
             insert_default_questions(db)
             # 更新元数据
             db.execute(
@@ -123,7 +128,9 @@ def insert_default_questions(db):
             qtype = row['type']
             question_text = row['question_text']
             options = row.get('options', '')
-            required = int(row.get('required', 1))
+            # 容错处理 required 字段，空值默认为 1（必填）
+            required_str = row.get('required', '1').strip()
+            required = int(required_str) if required_str else 1
             sort_order = int(row.get('sort_order', 0))
             db.execute(
                 'INSERT INTO questions (section, type, question_text, options, required, sort_order) VALUES (?,?,?,?,?,?)',
@@ -145,22 +152,38 @@ def login_required(f):
 def index():
     db = get_db()
     if request.method == 'POST':
-        # 生成被试编号
+        # 获取或生成被试编号
         participant_code = request.cookies.get('participant_code', str(uuid.uuid4()))
+        # 保存答案
         questions = db.execute('SELECT id, type FROM questions ORDER BY sort_order').fetchall()
         for q in questions:
             qid = q['id']
             qtype = q['type']
-            if qtype in ('radio', 'select', 'slider_0_100', 'slider_1_5', 'text', 'textarea'):
+            if qtype in ('radio', 'select', 'slider_0_100', 'slider_1_5', 'slider_0_10', 'slider_1_10', 'text', 'textarea'):
                 val = request.form.get(f'q{qid}', '')
                 db.execute('INSERT INTO responses (participant_code, question_id, answer_value) VALUES (?,?,?)',
                            (participant_code, qid, val))
-            # 对于checkbox未来可扩展
         db.commit()
+
+        # 更新会话结束时间
+        db.execute('UPDATE sessions SET end_time = datetime("now") WHERE participant_code=? AND end_time IS NULL',
+                   (participant_code,))
+        db.commit()
+
         resp = make_response(redirect(url_for('thankyou')))
         resp.set_cookie('participant_code', participant_code)
         return resp
     else:
+        # 获取或创建受试者ID
+        participant_code = request.cookies.get('participant_code', str(uuid.uuid4()))
+        # 记录新会话（开始时间和IP）
+        existing = db.execute('SELECT id FROM sessions WHERE participant_code=?', (participant_code,)).fetchone()
+        if not existing:
+            ip = request.remote_addr
+            db.execute('INSERT INTO sessions (participant_code, start_time, ip_address) VALUES (?, datetime("now"), ?)',
+                       (participant_code, ip))
+            db.commit()
+
         questions_raw = db.execute('SELECT * FROM questions ORDER BY sort_order').fetchall()
         questions = []
         for q in questions_raw:
@@ -181,7 +204,11 @@ def index():
             if sec not in sections:
                 sections[sec] = []
             sections[sec].append(q)
-        return render_template('index.html', sections=sections)
+
+        # 设置cookie
+        resp = make_response(render_template('index.html', sections=sections))
+        resp.set_cookie('participant_code', participant_code)
+        return resp
 
 @app.route('/thankyou')
 def thankyou():
@@ -209,7 +236,8 @@ def admin():
     db = get_db()
     question_count = db.execute('SELECT COUNT(*) FROM questions').fetchone()[0]
     response_count = db.execute('SELECT COUNT(DISTINCT participant_code) FROM responses').fetchone()[0]
-    return render_template('admin.html', question_count=question_count, response_count=response_count)
+    session_count = db.execute('SELECT COUNT(*) FROM sessions').fetchone()[0]
+    return render_template('admin.html', question_count=question_count, response_count=response_count, session_count=session_count)
 
 @app.route('/admin/questions')
 @login_required
@@ -265,8 +293,12 @@ def delete_question(id):
 @login_required
 def view_results():
     db = get_db()
-    # 获取所有被试及完成时间
-    participants = db.execute('SELECT participant_code, MIN(submitted_at) as started, MAX(submitted_at) as finished FROM responses GROUP BY participant_code').fetchall()
+    # 从 sessions 表获取所有被试的会话信息
+    participants = db.execute('''
+        SELECT s.participant_code, s.start_time, s.end_time, s.ip_address
+        FROM sessions s
+        ORDER BY s.start_time DESC
+    ''').fetchall()
     return render_template('results.html', participants=participants)
 
 @app.route('/admin/export')
@@ -274,19 +306,23 @@ def view_results():
 def export_csv():
     db = get_db()
     questions = db.execute('SELECT id, question_text FROM questions ORDER BY sort_order').fetchall()
-    all_codes = db.execute('SELECT DISTINCT participant_code FROM responses ORDER BY participant_code').fetchall()
-    # 构建CSV
+    # 查询所有会话
+    sessions = db.execute('SELECT participant_code, start_time, end_time, ip_address FROM sessions ORDER BY start_time').fetchall()
+
     output = io.StringIO()
     writer = csv.writer(output)
-    header = ['participant_code'] + [q['question_text'] for q in questions]
+    # 标题行：先放会话信息，再放题目
+    header = ['participant_code', 'start_time', 'end_time', 'ip_address'] + [q['question_text'] for q in questions]
     writer.writerow(header)
-    for pc in all_codes:
-        row = [pc['participant_code']]
+
+    for sess in sessions:
+        row = [sess['participant_code'], sess['start_time'], sess['end_time'] or '', sess['ip_address']]
         for q in questions:
             ans = db.execute('SELECT answer_value FROM responses WHERE participant_code=? AND question_id=?',
-                             (pc['participant_code'], q['id'])).fetchone()
+                             (sess['participant_code'], q['id'])).fetchone()
             row.append(ans['answer_value'] if ans else '')
         writer.writerow(row)
+
     output.seek(0)
     return Response(
         output.getvalue().encode('utf-8-sig'),
@@ -295,10 +331,7 @@ def export_csv():
     )
 
 # ====================== 启动 ======================
-# rescue.py 底部代码
 if __name__ == '__main__':
     init_db()
-    # 从环境变量获取端口，如果获取不到则使用5000作为备选
     port = int(os.environ.get('PORT', 5000))
-    # 注意：debug模式应设为False，因为生产环境不需要
     app.run(host='0.0.0.0', port=port, debug=False)

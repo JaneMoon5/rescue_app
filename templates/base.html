@@ -16,6 +16,49 @@
         .form-check:hover {
             background-color: #f8f9fa;
         }
+
+        /* 让滑块条变高、变宽 */
+        input[type="range"].form-range {
+            width: 100%;          /* 宽度占满容器，默认就是 100% */
+            height: 1.5rem;       /* 滑块条的总高度（包括轨道和滑块） */
+            margin: 0.5rem 0;     /* 上下留出间距 */
+        }
+
+        /* 设置滑块轨道的样式（Webkit 内核浏览器） */
+        input[type="range"]::-webkit-slider-runnable-track {
+            height: 10px;         /* 轨道高度 */
+            background: #e7ebef;  /* 轨道颜色 */
+            border-radius: 5px;
+        }
+
+        /* 设置滑块圆点的大小（Webkit） */
+        input[type="range"]::-webkit-slider-thumb {
+            width: 30px;
+            height: 30px;
+            margin-top: -10px;      /* 微调垂直对齐 */
+            background: #0d6efd;   /* 圆点颜色 */
+            border-radius: 50%;
+            cursor: pointer;
+        }
+
+        /* Firefox 的轨道样式 */
+        input[type="range"]::-moz-range-track {
+            height: 10px;
+            background: #e7ebef;
+            border-radius: 5px;
+        }
+
+        /* Firefox 的滑块圆点 */
+        input[type="range"]::-moz-range-thumb {
+            width: 30px;
+            height: 30px;
+            background: #0d6efd;
+            border: none;
+            border-radius: 50%;
+            cursor: pointer;
+        }
+
+
     </style>
 </head>
 <body>
