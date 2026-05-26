@@ -31,6 +31,16 @@ def force_https():
         return redirect(request.url.replace('http://', 'https://', 1), code=301)
 # =====================================
 
+# ===== 获取真实用户 IP（兼容代理和负载均衡） =====
+def get_real_ip():
+    """从请求头中提取真实客户端 IP"""
+    # 如果存在 X-Forwarded-For 头（通常由代理/负载均衡器设置），取第一个非代理 IP
+    if 'X-Forwarded-For' in request.headers:
+        # X-Forwarded-For 格式: client, proxy1, proxy2, ...
+        return request.headers.get('X-Forwarded-For').split(',')[0].strip()
+    # 否则直接使用 remote_addr（在无代理环境下）
+    return request.remote_addr
+
 # ===== 使用绝对路径确保数据库位于 app.py 同目录 =====
 basedir = os.path.abspath(os.path.dirname(__file__))
 DATABASE = os.path.join(basedir, 'questionnaire.db')
@@ -244,6 +254,14 @@ def index():
     if request.method == 'POST':
         # 获取或生成被试编号
         participant_code = request.cookies.get('participant_code', str(uuid.uuid4()))
+        # 确保 sessions 表中有该被试的记录（以防用户直接提交而未访问首页）
+        existing = db.execute('SELECT id FROM sessions WHERE participant_code=?', (participant_code,)).fetchone()
+        if not existing:
+            real_ip = get_real_ip()
+            start_time = datetime.now(timezone(timedelta(hours=8))).strftime('%Y-%m-%d %H:%M:%S')
+            db.execute('INSERT INTO sessions (participant_code, start_time, ip_address) VALUES (?, ?, ?)',
+                    (participant_code, start_time, real_ip))
+            db.commit()
         # 保存答案
         questions = db.execute('SELECT id, type FROM questions ORDER BY sort_order').fetchall()
         # 用于备份的答案字典 {题目文本: 答案值}
@@ -282,7 +300,7 @@ def index():
         # 记录新会话（开始时间和IP）
         existing = db.execute('SELECT id FROM sessions WHERE participant_code=?', (participant_code,)).fetchone()
         if not existing:
-            ip = request.remote_addr
+            ip = get_real_ip()
             beijing_time = datetime.now(timezone(timedelta(hours=8))).strftime('%Y-%m-%d %H:%M:%S')
             db.execute('INSERT INTO sessions (participant_code, start_time, ip_address) VALUES (?, ?, ?)',
                        (participant_code, beijing_time, ip))
