@@ -4,6 +4,13 @@ import csv
 import sqlite3, json, io, uuid
 from datetime import datetime, timezone, timedelta
 from flask import Flask, render_template, request, redirect, url_for, session, Response, make_response
+import os
+import json
+import gspread
+from google.oauth2.service_account import Credentials
+
+service_account_json = os.environ.get('GOOGLE_SERVICE_ACCOUNT')
+sheet_id = os.environ.get('GOOGLE_SHEET_ID')
 
 
 app = Flask(__name__)
@@ -28,6 +35,52 @@ def force_https():
 basedir = os.path.abspath(os.path.dirname(__file__))
 DATABASE = os.path.join(basedir, 'questionnaire.db')
 # ===================================================
+
+# ====================== Google Sheets 备份 ======================
+def get_google_sheet():
+    """返回 Google Sheet 的 worksheet 对象（第一个工作表）"""
+    SERVICE_ACCOUNT_JSON = os.environ.get('GOOGLE_SERVICE_ACCOUNT')
+    SHEET_ID = os.environ.get('GOOGLE_SHEET_ID')
+    
+    if not SERVICE_ACCOUNT_JSON or not SHEET_ID:
+        print("⚠️ Google Sheets 环境变量未配置，跳过备份")
+        return None
+    try:
+        creds_dict = json.loads(SERVICE_ACCOUNT_JSON)
+        scope = ['https://www.googleapis.com/auth/spreadsheets']
+        creds = Credentials.from_service_account_info(creds_dict, scopes=scope)
+        client = gspread.authorize(creds)
+        sheet = client.open_by_key(SHEET_ID).sheet1
+        return sheet
+    except Exception as e:
+        print(f"❌ 连接 Google Sheets 失败: {e}")
+        return None
+
+def backup_to_gsheet(participant_code, answers_dict):
+    """将单份问卷答案追加到 Google Sheet"""
+    sheet = get_google_sheet()
+    if not sheet:
+        return
+    
+    # 准备行数据：时间、被试编号、各题答案
+    row_data = [
+        datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+        participant_code
+    ]
+    # 按照答案字典的顺序追加（字典顺序是插入顺序，Python 3.7+ 保证）
+    for q_text, ans in answers_dict.items():
+        row_data.append(ans)
+    
+    # 如果 Sheet 完全为空（第一行无数据），则自动写入表头
+    if not sheet.get_all_values():
+        headers = ['提交时间', '被试编号'] + list(answers_dict.keys())
+        sheet.append_row(headers)
+        print("✅ 已自动创建表头")
+    
+    # 追加数据行
+    sheet.append_row(row_data)
+    print(f"📝 已备份到 Google Sheet: {participant_code}")
+
 
 # ====================== 数据库初始化 ======================
 def get_db():
@@ -157,20 +210,31 @@ def index():
         participant_code = request.cookies.get('participant_code', str(uuid.uuid4()))
         # 保存答案
         questions = db.execute('SELECT id, type FROM questions ORDER BY sort_order').fetchall()
+        # 用于备份的答案字典 {题目文本: 答案值}
+        answers_for_backup = {}
         for q in questions:
             qid = q['id']
             qtype = q['type']
             if qtype in ('radio', 'select', 'slider_0_100', 'slider_1_5', 'slider_0_10', 'slider_1_10', 'text', 'textarea'):
                 val = request.form.get(f'q{qid}', '')
+                # 保存到本地 SQLite（原有逻辑）
                 db.execute('INSERT INTO responses (participant_code, question_id, answer_value) VALUES (?,?,?)',
                            (participant_code, qid, val))
+                # 获取题目文本，存入备份字典
+                q_text_row = db.execute('SELECT question_text FROM questions WHERE id=?', (qid,)).fetchone()
+                if q_text_row:
+                    answers_for_backup[q_text_row['question_text']] = val
         db.commit()
 
-        # 更新会话结束时间
+        # 更新会话结束时间（原有逻辑）
         beijing_time = datetime.now(timezone(timedelta(hours=8))).strftime('%Y-%m-%d %H:%M:%S')
         db.execute('UPDATE sessions SET end_time = ? WHERE participant_code=? AND end_time IS NULL',
                    (beijing_time, participant_code))
         db.commit()
+
+        # ========== 新增：备份到 Google Sheets ==========
+        backup_to_gsheet(participant_code, answers_for_backup)
+        # =============================================
 
         resp = make_response(redirect(url_for('thankyou')))
         resp.set_cookie('participant_code', participant_code)

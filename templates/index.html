@@ -1,10 +1,27 @@
 {% extends "base.html" %}
 {% block title %}问卷 - 救赎感研究{% endblock %}
 {% block content %}
-<h2>救赎感体验与人物关系问卷</h2>
-<p>本问卷旨在了解人们在一段重要关系中的情感体验。问卷分四个部分，完成时间约为5分钟。您的所有回答将严格保密，仅用于研究目的。在回答时，请尽量依据您的真实感受，没有对错之分。如果您在填写过程中感到不适，您可以随时暂停或退出。</p>
 
-<form method="POST" id="mainForm">
+<!-- 欢迎首页 -->
+<div id="welcome-page" class="text-center py-5">
+    <h2>救赎感记忆研究问卷</h2>
+    <p class="lead mt-3">
+        感谢您参与本次心理学研究。
+    </p>
+    <p>
+        生活中，我们会遇到一些人，在我们极度痛苦、崩溃或陷入绝境时，他们的出现或存在本身，让我们产生了“得救了”、“被从深渊拉出”、“感觉一切都会好起来”的感觉。请闭上眼睛仔细回忆，在你的生命中，是否有这样一个人？<br>
+        如果有，欢迎您填写问卷，填写约需 5-8 分钟，感谢您的慷慨。<br>
+        如没有，您可以退出问卷啦，因为问卷体量较小，没有考虑到您的需求，我们下次见！
+    </p>
+    <p class="text-muted small">
+        您的所有回答将严格保密，仅用于科学研究。<br>
+        填写过程中如有不适，您可以随时退出。
+    </p>
+    <button id="start-btn" class="btn btn-primary btn-lg mt-3">开始填写</button>
+</div>
+
+<!-- 问卷主体（初始隐藏） -->
+<form method="POST" id="mainForm" style="display: none;">
     <!-- 分页容器 -->
     <div id="pages-container">
         {% for section, items in sections.items() %}
@@ -21,7 +38,7 @@
                         <input class="form-check-input radio-option" type="radio" name="q{{ q.id }}" value="{{ option }}"
                             id="q{{ q.id }}_{{ loop.index }}" {% if q.required %}required{% endif %}
                             {% if option == '其他' %}data-is-other="1"{% endif %}
-                            {% if q.sort_order == 5 %} data-jump-target="4" {% endif %}>
+                            {% if q.sort_order == 4 %} data-jump-target="3" {% endif %}>
                         <label class="form-check-label" for="q{{ q.id }}_{{ loop.index }}">{{ option }}</label>
                         {% if option == '其他' %}
                         <input type="text" class="form-control other-input mt-1" style="display:none; width:80%;" placeholder="请注明">
@@ -29,22 +46,30 @@
                     </div>
                     {% endfor %}
                 {% elif q.type == 'slider_0_10' %}
-                    <input type="range" class="form-range" min="0" max="10" value="5" name="q{{ q.id }}" oninput="this.nextElementSibling.textContent=this.value">
-                    <span class="slider-value">5</span>
+                    <div style="margin-bottom: 4rem;">
+                        <input type="range" class="form-range" min="0" max="10" value="5" name="q{{ q.id }}" oninput="this.nextElementSibling.textContent=this.value">
+                        <span class="slider-value">5</span>
+                    </div>
                 {% elif q.type == 'slider_1_10' %}
-                    <input type="range" class="form-range" min="1" max="10" value="5" step="1" name="q{{ q.id }}" oninput="this.nextElementSibling.textContent=this.value">
-                    <span class="slider-value">5</span>
+                    <div class="mb-4">
+                        <input type="range" class="form-range" min="1" max="10" value="5" step="1" name="q{{ q.id }}" oninput="this.nextElementSibling.textContent=this.value">
+                        <span class="slider-value">5</span>
+                    </div>
                 {% elif q.type == 'slider_0_100' %}
-                    <input type="range" class="form-range" min="0" max="100" value="50" name="q{{ q.id }}" oninput="this.nextElementSibling.textContent=this.value">
-                    <span class="slider-value">50</span>
+                    <div class="mb-4">
+                        <input type="range" class="form-range" min="0" max="100" value="50" name="q{{ q.id }}" oninput="this.nextElementSibling.textContent=this.value">
+                        <span class="slider-value">50</span>
+                    </div>
                 {% elif q.type == 'slider_1_5' %}
-                    <input type="range" class="form-range" min="1" max="5" value="3" step="1" name="q{{ q.id }}" oninput="this.nextElementSibling.textContent=this.value">
-                    <span class="slider-value">3</span>
+                    <div class="mb-4">
+                        <input type="range" class="form-range" min="1" max="5" value="3" step="1" name="q{{ q.id }}" oninput="this.nextElementSibling.textContent=this.value">
+                        <span class="slider-value">3</span>
+                    </div>
                 {% elif q.type == 'text' %}
                 <input type="text" class="form-control" name="q{{ q.id }}"
                     {% if q.required %}required{% endif %}
                     {% if '名字' in q.question_text or '昵称' in q.question_text or '代号' in q.question_text %}
-                        {% if q.sort_order == 2 %} id="rescuer-name"
+                        {% if q.sort_order == 1 %} id="rescuer-name"
                         {% elif '有积极影响的人' in q.question_text %} id="control-name"
                         {% endif %}
                     {% endif %}>
@@ -101,7 +126,7 @@
     }
 
     window.changePage = function(step) {
-        let newPage = currentPage + step;   // ✅ 用 let 代替 const
+        let newPage = currentPage + step;
         if (newPage >= 0 && newPage < pages.length) {
             
             // ========== 规则1：第一页选“否” → 自动提交 ==========
@@ -111,7 +136,6 @@
                 let selectedValue = null;
                 radios.forEach(r => { if (r.checked) selectedValue = r.value; });
                 if (selectedValue === '否') {
-                    // 移除所有隐藏页面中元素的 required 属性，避免干扰提交
                     pages.forEach((page, i) => {
                         if (i !== 0) {
                             page.querySelectorAll('[required]').forEach(el => {
@@ -122,15 +146,16 @@
                     document.getElementById('mainForm').submit();
                     return;
                 }
-            }   // ✅ 规则1结束的大括号
+            }
 
-            // ========== 规则2：第三页第三题选“否” → 跳到第五页 ==========
-            if (step === 1 && currentPage === 2) {
-                // 查找当前页中带有 data-jump-target 属性的被选中的单选按钮
-                const jumpRadio = document.querySelector('.page[data-page="2"] input[data-jump-target]:checked');
+            // ========== 规则2：第二页某题选“否” → 跳转到目标页 ==========
+            if (step === 1 && currentPage === 1) {
+                // 在 当前页（第二页） 中查找带 data-jump-target 且被选中的 radio
+                const currentPageEl = pages[1];
+                const jumpRadio = currentPageEl.querySelector('input[data-jump-target]:checked');
                 if (jumpRadio && jumpRadio.value === '否') {
                     const targetPage = parseInt(jumpRadio.getAttribute('data-jump-target'));
-                    // 移除当前页到目标页之间所有页面的 required
+                    // 移除中间页面的 required 属性
                     for (let i = currentPage + 1; i < targetPage; i++) {
                         pages[i].querySelectorAll('[required]').forEach(el => el.removeAttribute('required'));
                     }
@@ -163,6 +188,27 @@
         }
     };
 
+    // ========== 欢迎页按钮点击事件 ==========
+    document.getElementById('start-btn').addEventListener('click', function() {
+        // 隐藏欢迎页
+        document.getElementById('welcome-page').style.display = 'none';
+        // 显示问卷主体
+        var mainForm = document.getElementById('mainForm');
+        mainForm.style.display = 'block';
+        
+        // 强制重置所有分页状态
+        pages.forEach(function(page, i) {
+            page.style.display = (i === 0) ? 'block' : 'none';
+        });
+        currentPage = 0;
+        prevBtn.style.display = 'none';
+        nextBtn.style.display = 'inline-block';
+        submitBtn.style.display = 'none';
+        pageIndicator.textContent = '第 1 页 / 共 ' + pages.length + ' 页';
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    });
+
+    // 初始调用 showPage(0) 可以保留（虽然此时表单隐藏，无伤大雅）
     showPage(0);
 
     // ===== 占位符替换逻辑 =====
@@ -179,18 +225,14 @@
             if (!original) return;
 
             let displayText = original;
-            // 替换救赎者占位符
             if (original.includes('{name}')) {
                 displayText = displayText.replace(/{name}/g, rescuerName || '{name}');
             }
-            // 替换对照者占位符
             if (original.includes('{name_ctr}')) {
                 displayText = displayText.replace(/{name_ctr}/g, controlName || '{name_ctr}');
             }
 
-            // 更新标签文本
             label.textContent = displayText;
-            // 如果该题为必填，重新添加红色星号
             if (label.getAttribute('data-required') === '1') {
                 const star = document.createElement('span');
                 star.className = 'text-danger';
@@ -206,10 +248,9 @@
     if (controlInput) {
         controlInput.addEventListener('input', replaceAllPlaceholders);
     }
-    // 页面加载时执行一次，处理浏览器自动填充等
     replaceAllPlaceholders();
     
-    // 显示/隐藏文本框
+    // 显示/隐藏“其他”文本框
     document.querySelectorAll('.radio-option[data-is-other="1"]').forEach(function(radio) {
         radio.addEventListener('change', function() {
             var container = this.closest('.form-check');
@@ -224,30 +265,27 @@
         });
     });
 
-    // 表单提交前，将“其他”的值组合成“其他：xxx”
+    // 表单提交前处理“其他”选项
     document.getElementById('mainForm').addEventListener('submit', function(e) {
         var otherRadios = document.querySelectorAll('.radio-option[data-is-other="1"]:checked');
         otherRadios.forEach(function(radio) {
             var otherInput = radio.closest('.form-check').querySelector('.other-input');
             var customText = otherInput ? otherInput.value.trim() : '';
             if (customText.length > 0) {
-                // 创建隐藏域，提交组合值
                 var hidden = document.createElement('input');
                 hidden.type = 'hidden';
                 hidden.name = radio.name;
                 hidden.value = '其他：' + customText;
                 radio.parentNode.appendChild(hidden);
-                // 移除原 radio 的 name，防止提交原“其他”值
                 radio.removeAttribute('name');
             } else {
-                // 如果没填内容，阻止提交并提示
                 alert('请在选择“其他”时填写具体内容。');
                 e.preventDefault();
             }
         });
     });
 
-    // 页面加载后，若某个“其他”已被默认选中（一般不会），则显示文本框
+    // 加载时显示已选“其他”的文本框
     window.addEventListener('load', function() {
         document.querySelectorAll('.radio-option[data-is-other="1"]:checked').forEach(function(radio) {
             var otherInput = radio.closest('.form-check').querySelector('.other-input');

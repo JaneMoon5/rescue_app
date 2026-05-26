@@ -1,2 +1,4 @@
 Flask==2.3.3
 gunicorn==21.2.0
+gspread==6.1.2
+google-auth==2.29.0
