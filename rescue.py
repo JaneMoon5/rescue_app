@@ -2,8 +2,9 @@ import shutil
 import os
 import csv
 import sqlite3, json, io, uuid
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 from flask import Flask, render_template, request, redirect, url_for, session, Response, make_response
+
 
 app = Flask(__name__)
 # 从环境变量读取密钥，若不存在则使用一个随机生成的字符串（仅用于临时）
@@ -166,8 +167,9 @@ def index():
         db.commit()
 
         # 更新会话结束时间
-        db.execute('UPDATE sessions SET end_time = datetime("now") WHERE participant_code=? AND end_time IS NULL',
-                   (participant_code,))
+        beijing_time = datetime.now(timezone(timedelta(hours=8))).strftime('%Y-%m-%d %H:%M:%S')
+        db.execute('UPDATE sessions SET end_time = ? WHERE participant_code=? AND end_time IS NULL',
+                   (beijing_time, participant_code))
         db.commit()
 
         resp = make_response(redirect(url_for('thankyou')))
@@ -180,8 +182,9 @@ def index():
         existing = db.execute('SELECT id FROM sessions WHERE participant_code=?', (participant_code,)).fetchone()
         if not existing:
             ip = request.remote_addr
-            db.execute('INSERT INTO sessions (participant_code, start_time, ip_address) VALUES (?, datetime("now"), ?)',
-                       (participant_code, ip))
+            beijing_time = datetime.now(timezone(timedelta(hours=8))).strftime('%Y-%m-%d %H:%M:%S')
+            db.execute('INSERT INTO sessions (participant_code, start_time, ip_address) VALUES (?, ?, ?)',
+                       (participant_code, beijing_time, ip))
             db.commit()
 
         questions_raw = db.execute('SELECT * FROM questions ORDER BY sort_order').fetchall()
