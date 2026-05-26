@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %}提交结果{% endblock %}
+{% block content %}
+<h2>已提交问卷列表</h2>
+<table class="table table-striped">
+    <thead>
+        <tr><th>被试编号</th><th>开始时间</th><th>完成时间</th></tr>
+    </thead>
+    <tbody>
+        {% for p in participants %}
+        <tr>
+            <td>{{ p.participant_code[:8] }}...</td>
+            <td>{{ p.started }}</td>
+            <td>{{ p.finished }}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+<a href="{{ url_for('admin') }}" class="btn btn-secondary">返回面板</a>
+{% endblock %}

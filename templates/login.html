@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block title %}管理员登录{% endblock %}
+{% block content %}
+<div class="col-md-4 offset-md-4">
+    <h2>管理员登录</h2>
+    <form method="POST">
+        {% if error %}<div class="alert alert-danger">{{ error }}</div>{% endif %}
+        <div class="mb-3">
+            <label class="form-label">用户名</label>
+            <input type="text" class="form-control" name="username" required>
+        </div>
+        <div class="mb-3">
+            <label class="form-label">密码</label>
+            <input type="password" class="form-control" name="password" required>
+        </div>
+        <button type="submit" class="btn btn-dark">登录</button>
+    </form>
+</div>
+{% endblock %}

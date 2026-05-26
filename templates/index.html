@@ -1,0 +1,236 @@
+{% extends "base.html" %}
+{% block title %}问卷 - 救赎感研究{% endblock %}
+{% block content %}
+<h2>救赎感体验与人物关系问卷</h2>
+<p>请根据您的真实感受回答，答案没有对错之分。问卷分为多个部分，请逐页填写。</p>
+
+<form method="POST" id="mainForm">
+    <!-- 分页容器 -->
+    <div id="pages-container">
+        {% for section, items in sections.items() %}
+        <div class="page" data-page="{{ loop.index0 }}" {% if loop.index0 != 0 %}style="display:none;"{% endif %}>
+            <h3 class="section-title">{{ section }}</h3>
+            {% for q in items %}
+            <div class="mb-3">
+                <label class="form-label" data-original-text="{{ q.question_text }}" {% if q.required %}data-required="1"{% endif %}>
+                    {{ q.question_text }}{% if q.required %} <span class="text-danger">*</span>{% endif %}
+                </label>
+                {% if q.type == 'radio' %}
+                    {% for option in q.options_list %}
+                    <div class="form-check">
+                        <input class="form-check-input radio-option" type="radio" name="q{{ q.id }}" value="{{ option }}"
+                            id="q{{ q.id }}_{{ loop.index }}" {% if q.required %}required{% endif %}
+                            {% if option == '其他' %}data-is-other="1"{% endif %}>
+                        <label class="form-check-label" for="q{{ q.id }}_{{ loop.index }}">{{ option }}</label>
+                        {% if option == '其他' %}
+                        <input type="text" class="form-control other-input mt-1" style="display:none; width:80%;" placeholder="请注明">
+                        {% endif %}
+                    </div>
+                    {% endfor %}
+                {% elif q.type == 'slider_0_10' %}
+                    <input type="range" class="form-range" min="0" max="10" value="5" name="q{{ q.id }}" oninput="this.nextElementSibling.textContent=this.value">
+                    <span class="slider-value">5</span>
+                {% elif q.type == 'slider_1_10' %}
+                    <input type="range" class="form-range" min="1" max="10" value="5" step="1" name="q{{ q.id }}" oninput="this.nextElementSibling.textContent=this.value">
+                    <span class="slider-value">5</span>
+                {% elif q.type == 'slider_0_100' %}
+                    <input type="range" class="form-range" min="0" max="100" value="50" name="q{{ q.id }}" oninput="this.nextElementSibling.textContent=this.value">
+                    <span class="slider-value">50</span>
+                {% elif q.type == 'slider_1_5' %}
+                    <input type="range" class="form-range" min="1" max="5" value="3" step="1" name="q{{ q.id }}" oninput="this.nextElementSibling.textContent=this.value">
+                    <span class="slider-value">3</span>
+                {% elif q.type == 'text' %}
+                <input type="text" class="form-control" name="q{{ q.id }}"
+                    {% if q.required %}required{% endif %}
+                    {% if '名字' in q.question_text or '昵称' in q.question_text or '代号' in q.question_text %}
+                        {% if q.sort_order == 2 %} id="rescuer-name"
+                        {% elif '有积极影响的人' in q.question_text %} id="control-name"
+                        {% endif %}
+                    {% endif %}>
+                {% elif q.type == 'textarea' %}
+                    <textarea class="form-control" rows="3" name="q{{ q.id }}" {% if q.required %}required{% endif %}></textarea>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+        {% endfor %}
+    </div>
+    
+    <!-- 插入结束页面 -->
+    <div id="endPage" style="display:none;" class="text-center py-5">
+        <h4>感谢您的参与！</h4>
+        <p>由于您不符合本次研究的目标条件，问卷到此结束，谢啦~</p>
+    </div>
+
+    <!-- 导航按钮 -->
+    <div class="mt-4 d-flex justify-content-between">
+        <button type="button" id="prevBtn" class="btn btn-secondary" onclick="changePage(-1)" style="display:none;">上一页</button>
+        <span id="pageIndicator" class="align-self-center"></span>
+        <button type="button" id="nextBtn" class="btn btn-primary" onclick="changePage(1)">下一页</button>
+        <button type="submit" id="submitBtn" class="btn btn-success" style="display:none;">提交问卷</button>
+    </div>
+</form>
+
+<!-- 分页与占位符替换脚本 -->
+<script>
+(function() {
+    // 1. 获取所有元素
+    const pages = document.querySelectorAll('.page');
+    const prevBtn = document.getElementById('prevBtn');
+    const nextBtn = document.getElementById('nextBtn');
+    const submitBtn = document.getElementById('submitBtn');
+    const pageIndicator = document.getElementById('pageIndicator');
+    let currentPage = 0;
+
+    function showPage(index) {
+        pages.forEach((page, i) => {
+            page.style.display = i === index ? 'block' : 'none';
+        });
+        prevBtn.style.display = index === 0 ? 'none' : 'inline-block';
+        if (index === pages.length - 1) {
+            nextBtn.style.display = 'none';
+            submitBtn.style.display = 'inline-block';
+        } else {
+            nextBtn.style.display = 'inline-block';
+            submitBtn.style.display = 'none';
+        }
+        pageIndicator.textContent = `第 ${index + 1} 页 / 共 ${pages.length} 页`;
+        currentPage = index;
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    window.changePage = function(step) {
+        const newPage = currentPage + step;
+        if (newPage >= 0 && newPage < pages.length) {
+            if (step === 1 && currentPage === 0) {
+                const firstPage = pages[0];
+                const radios = firstPage.querySelectorAll('input[type="radio"]');
+                let selectedValue = null;
+                radios.forEach(r => { if (r.checked) selectedValue = r.value; });
+                if (selectedValue === '否') {
+                    document.getElementById('pages-container').style.display = 'none';
+                    document.getElementById('endPage').style.display = 'block';
+                    prevBtn.style.display = 'none';
+                    nextBtn.style.display = 'none';
+                    submitBtn.style.display = 'none';
+                    pageIndicator.textContent = '';
+                    return;
+                }
+            }
+            if (step === 1) {
+                const currentPageEl = pages[currentPage];
+                const requiredFields = currentPageEl.querySelectorAll('[required]');
+                let allValid = true;
+                requiredFields.forEach(field => {
+                    if (field.type === 'radio') {
+                        const name = field.getAttribute('name');
+                        const checked = currentPageEl.querySelector(`input[name="${name}"]:checked`);
+                        if (!checked) allValid = false;
+                    } else if (!field.value.trim()) {
+                        allValid = false;
+                    }
+                });
+                if (!allValid) {
+                    alert('请完成本页所有必填题后再继续。');
+                    return;
+                }
+            }
+            showPage(newPage);
+        }
+    };
+
+    showPage(0);
+
+    // ===== 占位符替换逻辑 =====
+    const rescuerInput = document.getElementById('rescuer-name');
+    const controlInput = document.getElementById('control-name');
+    const labels = document.querySelectorAll('.form-label[data-original-text]');
+
+    function replaceAllPlaceholders() {
+        const rescuerName = rescuerInput ? rescuerInput.value.trim() : '';
+        const controlName = controlInput ? controlInput.value.trim() : '';
+
+        labels.forEach(function(label) {
+            const original = label.getAttribute('data-original-text');
+            if (!original) return;
+
+            let displayText = original;
+            // 替换救赎者占位符
+            if (original.includes('{name}')) {
+                displayText = displayText.replace(/{name}/g, rescuerName || '{name}');
+            }
+            // 替换对照者占位符
+            if (original.includes('{name_ctr}')) {
+                displayText = displayText.replace(/{name_ctr}/g, controlName || '{name_ctr}');
+            }
+
+            // 更新标签文本
+            label.textContent = displayText;
+            // 如果该题为必填，重新添加红色星号
+            if (label.getAttribute('data-required') === '1') {
+                const star = document.createElement('span');
+                star.className = 'text-danger';
+                star.textContent = ' *';
+                label.appendChild(star);
+            }
+        });
+    }
+
+    if (rescuerInput) {
+        rescuerInput.addEventListener('input', replaceAllPlaceholders);
+    }
+    if (controlInput) {
+        controlInput.addEventListener('input', replaceAllPlaceholders);
+    }
+    // 页面加载时执行一次，处理浏览器自动填充等
+    replaceAllPlaceholders();
+    
+    // 显示/隐藏文本框
+    document.querySelectorAll('.radio-option[data-is-other="1"]').forEach(function(radio) {
+        radio.addEventListener('change', function() {
+            var container = this.closest('.form-check');
+            var otherInput = container.querySelector('.other-input');
+            if (this.checked) {
+                otherInput.style.display = 'block';
+                otherInput.focus();
+            } else {
+                otherInput.style.display = 'none';
+                otherInput.value = '';
+            }
+        });
+    });
+
+    // 表单提交前，将“其他”的值组合成“其他：xxx”
+    document.getElementById('mainForm').addEventListener('submit', function(e) {
+        var otherRadios = document.querySelectorAll('.radio-option[data-is-other="1"]:checked');
+        otherRadios.forEach(function(radio) {
+            var otherInput = radio.closest('.form-check').querySelector('.other-input');
+            var customText = otherInput ? otherInput.value.trim() : '';
+            if (customText.length > 0) {
+                // 创建隐藏域，提交组合值
+                var hidden = document.createElement('input');
+                hidden.type = 'hidden';
+                hidden.name = radio.name;
+                hidden.value = '其他：' + customText;
+                radio.parentNode.appendChild(hidden);
+                // 移除原 radio 的 name，防止提交原“其他”值
+                radio.removeAttribute('name');
+            } else {
+                // 如果没填内容，阻止提交并提示
+                alert('请在选择“其他”时填写具体内容。');
+                e.preventDefault();
+            }
+        });
+    });
+
+    // 页面加载后，若某个“其他”已被默认选中（一般不会），则显示文本框
+    window.addEventListener('load', function() {
+        document.querySelectorAll('.radio-option[data-is-other="1"]:checked').forEach(function(radio) {
+            var otherInput = radio.closest('.form-check').querySelector('.other-input');
+            if (otherInput) otherInput.style.display = 'block';
+        });
+    });
+
+})();
+</script>
+{% endblock %}

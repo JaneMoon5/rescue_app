@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}管理面板{% endblock %}
+{% block content %}
+<h1>管理面板</h1>
+<ul class="list-group">
+    <li class="list-group-item d-flex justify-content-between align-items-center">
+        题目总数
+        <span class="badge bg-primary rounded-pill">{{ question_count }}</span>
+    </li>
+    <li class="list-group-item d-flex justify-content-between align-items-center">
+        已提交问卷数
+        <span class="badge bg-success rounded-pill">{{ response_count }}</span>
+    </li>
+</ul>
+<div class="mt-4">
+    <a href="{{ url_for('manage_questions') }}" class="btn btn-outline-primary">管理问卷题目</a>
+    <a href="{{ url_for('view_results') }}" class="btn btn-outline-secondary">查看提交结果</a>
+    <a href="{{ url_for('export_csv') }}" class="btn btn-outline-success">导出CSV</a>
+    <a href="{{ url_for('logout') }}" class="btn btn-outline-danger">退出</a>
+</div>
+{% endblock %}

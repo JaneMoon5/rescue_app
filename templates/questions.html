@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block title %}题目管理{% endblock %}
+{% block content %}
+<h2>题目管理</h2>
+<a href="{{ url_for('new_question') }}" class="btn btn-success mb-3">添加新题目</a>
+<table class="table table-bordered">
+    <thead>
+        <tr>
+            <th>ID</th><th>部分</th><th>类型</th><th>题干</th><th>必填</th><th>排序</th><th>操作</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for q in questions %}
+        <tr>
+            <td>{{ q.id }}</td>
+            <td>{{ q.section }}</td>
+            <td>{{ q.type }}</td>
+            <td>{{ q.question_text[:30] }}...</td>
+            <td>{{ '是' if q.required else '否' }}</td>
+            <td>{{ q.sort_order }}</td>
+            <td>
+                <a href="{{ url_for('edit_question', id=q.id) }}" class="btn btn-sm btn-warning">编辑</a>
+                <a href="{{ url_for('delete_question', id=q.id) }}" class="btn btn-sm btn-danger" onclick="return confirm('确定删除吗？')">删除</a>
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+<a href="{{ url_for('admin') }}" class="btn btn-secondary">返回面板</a>
+{% endblock %}

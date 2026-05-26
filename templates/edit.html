@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block title %}{% if question %}编辑题目{% else %}新增题目{% endif %}{% endblock %}
+{% block content %}
+<h2>{% if question %}编辑题目{% else %}新增题目{% endif %}</h2>
+<form method="POST">
+    <div class="mb-3">
+        <label class="form-label">所属部分</label>
+        <input type="text" class="form-control" name="section" value="{{ question.section if question else '' }}" required>
+    </div>
+    <div class="mb-3">
+        <label class="form-label">题目类型</label>
+        <select class="form-select" name="type">
+            {% for t in ['radio', 'select', 'slider_0_10', 'slider_1_10', 'slider_0_100', 'slider_1_5', 'text', 'textarea'] %}
+            <option value="{{ t }}" {% if question and question.type == t %}selected{% endif %}>{{ t }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    <div class="mb-3">
+        <label class="form-label">题干</label>
+        <textarea class="form-control" name="question_text" rows="2">{{ question.question_text if question else '' }}</textarea>
+    </div>
+    <div class="mb-3">
+        <label class="form-label">选项 (JSON数组，仅用于 radio/select)</label>
+        <input type="text" class="form-control" name="options" value="{{ question.options if question else '' }}" placeholder='["选项1", "选项2"]'>
+    </div>
+    <div class="form-check mb-3">
+        <input class="form-check-input" type="checkbox" name="required" {% if question and question.required %}checked{% endif %}>
+        <label class="form-check-label">必填</label>
+    </div>
+    <div class="mb-3">
+        <label class="form-label">排序 (数字越小越前)</label>
+        <input type="number" class="form-control" name="sort_order" value="{{ question.sort_order if question else '0' }}" required>
+    </div>
+    <button type="submit" class="btn btn-primary">保存</button>
+    <a href="{{ url_for('manage_questions') }}" class="btn btn-secondary">取消</a>
+</form>
+{% endblock %}
