@@ -62,24 +62,44 @@ def backup_to_gsheet(participant_code, answers_dict):
     if not sheet:
         return
     
-    # 准备行数据：时间、被试编号、各题答案
+    # 从 sessions 表中获取该被试的会话信息（开始时间、IP）
+    db = get_db()
+    session_info = db.execute(
+        'SELECT start_time, end_time, ip_address FROM sessions WHERE participant_code=? ORDER BY start_time DESC LIMIT 1',
+        (participant_code,)
+    ).fetchone()
+    db.close()  # 注意：不要关闭全局 db 连接，这里用的是独立连接
+    
+    if not session_info:
+        # 理论上应该存在，如果不存在则用空值
+        start_time = ''
+        end_time = ''
+        ip_address = ''
+    else:
+        start_time = session_info['start_time'] or ''
+        end_time = session_info['end_time'] or ''
+        ip_address = session_info['ip_address'] or ''
+    
+    # 准备行数据：顺序必须与表头一致
     row_data = [
-        datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-        participant_code
+        datetime.now().strftime('%Y-%m-%d %H:%M:%S'),  # 提交时间
+        participant_code,                              # 被试编号
+        start_time,                                    # 开始时间
+        end_time,                                      # 结束时间
+        ip_address                                     # IP地址
     ]
-    # 按照答案字典的顺序追加（字典顺序是插入顺序，Python 3.7+ 保证）
+    # 添加各题答案（按题目文本顺序）
     for q_text, ans in answers_dict.items():
         row_data.append(ans)
     
-    # 如果 Sheet 完全为空（第一行无数据），则自动写入表头
+    # 如果 Sheet 为空，先写入表头（可选，建议手动预设表头，避免自动创建）
     if not sheet.get_all_values():
-        headers = ['提交时间', '被试编号'] + list(answers_dict.keys())
+        headers = ['提交时间', '被试编号', '开始时间', '结束时间', 'IP地址'] + list(answers_dict.keys())
         sheet.append_row(headers)
         print("✅ 已自动创建表头")
     
-    # 追加数据行
     sheet.append_row(row_data)
-    print(f"📝 已备份到 Google Sheet: {participant_code}")
+    print(f"📝 已备份到 Google Sheet: {participant_code} (包含会话信息)")
 
 
 # ====================== 数据库初始化 ======================
